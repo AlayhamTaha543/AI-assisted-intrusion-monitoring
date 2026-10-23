@@ -1,10 +1,7 @@
-from datetime import timedelta
-
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Q, Min, Max
 
 from events.models import LogEvent
-from alerts.models import Alert, MITRE
 
 
 def evaluate_brute_force(source_ip, window_start, window_end):
@@ -18,6 +15,7 @@ def evaluate_brute_force(source_ip, window_start, window_end):
     if failed_count < settings.BRUTE_FORCE_THRESHOLD:
         return None
     distinct_usernames = events.exclude(Q(username__isnull=True) | Q(username='')).values('username').distinct().count()
+    agg = events.aggregate(first=Min('timestamp'), last=Max('timestamp'))
     evidence = {
         'failed_logins': failed_count,
         'distinct_usernames': distinct_usernames,
@@ -26,7 +24,7 @@ def evaluate_brute_force(source_ip, window_start, window_end):
         'window_start': window_start.isoformat(),
         'window_end': window_end.isoformat(),
     }
-    return evidence, failed_count
+    return evidence, failed_count, agg['first'], agg['last']
 
 
 def evaluate_port_scan(source_ip, window_start, window_end):
@@ -41,6 +39,7 @@ def evaluate_port_scan(source_ip, window_start, window_end):
     distinct_ports = events.values('dest_port').distinct().count()
     if distinct_ports < settings.PORT_SCAN_THRESHOLD:
         return None
+    agg = events.aggregate(first=Min('timestamp'), last=Max('timestamp'))
     evidence = {
         'distinct_ports': distinct_ports,
         'connection_events': connection_events,
@@ -49,4 +48,4 @@ def evaluate_port_scan(source_ip, window_start, window_end):
         'window_start': window_start.isoformat(),
         'window_end': window_end.isoformat(),
     }
-    return evidence, distinct_ports
+    return evidence, distinct_ports, agg['first'], agg['last']
