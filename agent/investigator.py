@@ -13,6 +13,8 @@ from events.models import LogEvent
 
 logger = logging.getLogger(__name__)
 
+TRANSIENT_ERRORS = (ConnectionError, httpx.TransportError)
+
 
 class TransientLLMError(Exception):
     pass
@@ -133,7 +135,7 @@ def investigate(alert):
             tools=[TOOL_DEFINITION],
             options={'temperature': 0},
         )
-    except (ConnectionError, httpx.ConnectError, httpx.TimeoutException) as e:
+    except TRANSIENT_ERRORS as e:
         raise TransientLLMError(str(e)) from e
     except ollama.ResponseError as e:
         raise LLMResponseError(str(e)) from e
@@ -166,7 +168,7 @@ def investigate(alert):
                 format=Assessment.model_json_schema(),
                 options={'temperature': 0},
             )
-        except (ConnectionError, httpx.ConnectError, httpx.TimeoutException) as e:
+        except TRANSIENT_ERRORS as e:
             raise TransientLLMError(str(e)) from e
         except ollama.ResponseError as e:
             raise LLMResponseError(str(e)) from e

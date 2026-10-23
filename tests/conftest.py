@@ -57,3 +57,24 @@ def make_events(ip, event_type, n, start=None, protocol='ssh', dest_port=22):
 
 def post_events(client, token, events):
     return client.post('/api/events/', data=json.dumps(events), content_type='application/json', HTTP_AUTHORIZATION=f'Token {token}')
+
+
+def make_alert(**kwargs):
+    from alerts.models import Alert, MITRE
+    now = timezone.now()
+    defaults = dict(
+        rule_name='brute_force',
+        source_ip='203.0.113.45',
+        incident_status='open',
+        investigation_status='queued',
+        severity='high',
+        mitre_id=MITRE['brute_force']['id'],
+        mitre_name=MITRE['brute_force']['name'],
+        first_seen_at=now,
+        last_seen_at=now,
+        last_window_count=20,
+        peak_window_count=20,
+        evidence={'failed_logins': 20, 'distinct_usernames': 3},
+    )
+    defaults.update(kwargs)
+    return Alert.objects.create(**defaults)
