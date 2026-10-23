@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 import json
+import time
+
 import ollama
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -28,38 +31,50 @@ TOOL_DEFINITION = {
 }
 
 
+def _client():
+    host = 'http://localhost:11434'
+    return ollama.Client(host=host, timeout=60)
+
+
 def run():
     evidence = {'failed_logins': 25, 'distinct_usernames': 5, 'threshold': 20}
-    prompt = f"Rule: brute_force\nSource IP: 203.0.113.45\nEvidence: {json.dumps(evidence)}\n"
-    messages = [
-        {'role': 'system', 'content': 'You are a security investigator. Only return JSON with summary and recommended_actions.'},
-        {'role': 'user', 'content': prompt},
-    ]
-    tool_calls = 0
-    valid = 0
+    results = []
     for i in range(3):
+        messages = [
+            {'role': 'system', 'content': 'You are a security investigator. Only return JSON with summary and recommended_actions.'},
+            {'role': 'user', 'content': f"Rule: brute_force\nSource IP: 203.0.113.45\nEvidence: {json.dumps(evidence)}\n"},
+        ]
+        tool_called = False
         try:
-            resp1 = ollama.chat(model='qwen2.5:7b', messages=messages, tools=[TOOL_DEFINITION])
+            start = time.time()
+            resp1 = _client().chat(model='qwen2.5:7b', messages=messages, tools=[TOOL_DEFINITION], options={'temperature': 0})
             msg = resp1.get('message', {}) if isinstance(resp1, dict) else getattr(resp1, 'message', {})
-            tcs = msg.get('tool_calls') or []
-            if len(tcs) == 1 and tcs[0].get('function', {}).get('name') == 'get_related_context':
-                tool_calls += 1
+            tcs = getattr(msg, 'tool_calls', None) if not isinstance(msg, dict) else msg.get('tool_calls') or []
+            if tcs and len(tcs) == 1:
+                tool_called = True
                 messages.append(msg)
                 ctx = get_related_context()
-                messages.append({'role': 'tool', 'name': 'get_related_context', 'content': json.dumps(ctx)})
-            resp2 = ollama.chat(
+                messages.append({'role': 'tool', 'tool_name': 'get_related_context', 'content': json.dumps(ctx)})
+            resp2 = _client().chat(
                 model='qwen2.5:7b',
                 messages=messages + [{'role': 'user', 'content': 'Return JSON.'}],
                 format=Assessment.model_json_schema(),
+                options={'temperature': 0},
             )
             content = resp2.get('message', {}).get('content', '') if isinstance(resp2, dict) else getattr(resp2.message, 'content', '')
             data = json.loads(content)
             Assessment.model_validate(data)
-            valid += 1
-            print(f'run{i+1}: ok')
+            latency = int((time.time() - start) * 1000)
+            results.append((tool_called, True, latency))
+            print(f'run{i+1}: tool_called={tool_called} valid=True latency_ms={latency}')
         except Exception as e:
+            results.append((tool_called, False, 0))
             print(f'run{i+1}: fail {e}')
-    print(f'tool_calls={tool_calls} valid={valid}')
+    try:
+        with open('docs/DECISIONS.md', 'a') as f:
+            f.write(f'\nStep0: {results}\n')
+    except Exception:
+        pass
 
 
 if __name__ == '__main__':
