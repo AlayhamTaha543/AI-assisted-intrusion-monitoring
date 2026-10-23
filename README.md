@@ -17,10 +17,11 @@ flowchart TD
 
 ## Setup
 
-1. `cp .env.example .env` and edit secrets
+1. `cp .env.example .env` and edit secrets (or run `make env` to generate a secret key)
 2. `make up`
-3. `make users`
-4. `make demo`
+3. `make users` (copy the printed `INGEST_TOKEN`)
+4. `INGEST_TOKEN=<key> make demo`
+5. Open `/admin/` for the Django Admin
 
 ## Tests
 
