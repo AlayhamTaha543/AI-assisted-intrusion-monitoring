@@ -85,6 +85,8 @@ def run_investigation(self, alert_id):
                 final_code = 'llm_error'
                 logger.info('investigation alert=%s attempt=%s outcome=llm_error', alert_id, attempts)
                 break
+            except SoftTimeLimitExceeded:
+                raise
             except Exception:
                 final_code = 'unexpected_error'
                 logger.exception('investigation alert=%s attempt=%s outcome=unexpected_error', alert_id, attempts)

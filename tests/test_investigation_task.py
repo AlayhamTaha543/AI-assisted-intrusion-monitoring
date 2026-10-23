@@ -61,3 +61,24 @@ def test_invalid_json_not_retried(db):
     assert alert.investigation_error == 'invalid_output'
     assert alert.investigation_attempts == 1
     assert calls == 2
+
+
+def test_soft_time_limit_recorded(db):
+    from celery.exceptions import SoftTimeLimitExceeded
+    alert = make_alert()
+    with patch('agent.tasks.investigate', side_effect=SoftTimeLimitExceeded()):
+        run_investigation.run(alert.id)
+    alert.refresh_from_db()
+    assert alert.investigation_status == 'failed'
+    assert alert.investigation_error == 'time_limit'
+
+
+def test_unexpected_error_still_contained(db):
+    alert = make_alert()
+    with patch('agent.tasks.investigate', side_effect=RuntimeError('boom')) as inv:
+        run_investigation.run(alert.id)
+    alert.refresh_from_db()
+    assert alert.investigation_status == 'failed'
+    assert alert.investigation_error == 'unexpected_error'
+    assert alert.investigation_attempts == 1
+    assert inv.call_count == 1
