@@ -21,8 +21,9 @@ def test_agent_saves_valid_output(db):
     )
     mock_resp1 = {'message': {'role': 'assistant', 'content': ''}}
     mock_resp2 = {'message': {'role': 'assistant', 'content': '{"summary": "Brute force detected", "recommended_actions": ["Block IP"]}'}}
-    with patch.object(investigator.ollama, 'chat') as m:
-        m.side_effect = [mock_resp1, mock_resp2]
+    with patch.object(investigator.ollama, 'Client') as m:
+        client_inst = m.return_value
+        client_inst.chat.side_effect = [mock_resp1, mock_resp2]
         res = investigator.investigate(alert)
         assert res['summary'] == 'Brute force detected'
         assert res['recommended_actions'] == ['Block IP']
