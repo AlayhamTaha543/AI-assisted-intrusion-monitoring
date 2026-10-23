@@ -1,11 +1,16 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'replace-me')
 DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+if not DEBUG and (not SECRET_KEY or SECRET_KEY == 'replace-me'):
+    raise ImproperlyConfigured('DJANGO_SECRET_KEY must be set when DEBUG is false')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -20,7 +25,6 @@ INSTALLED_APPS = [
     'alerts',
     'detection',
     'agent',
-    'simulator',
 ]
 
 MIDDLEWARE = [
@@ -96,7 +100,11 @@ REST_FRAMEWORK = {
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
 CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_TRANSPORT_OPTIONS = {'socket_connect_timeout': 2, 'socket_timeout': 2}
+CELERY_BROKER_CONNECTION_TIMEOUT = 2
+CELERY_TASK_PUBLISH_RETRY = False
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_SOFT_TIME_LIMIT = 270
 CELERY_TASK_TIME_LIMIT = 300
 CELERY_TASK_ACKS_LATE = False
@@ -112,13 +120,3 @@ MAX_EVENT_AGE_HOURS = int(os.environ.get('MAX_EVENT_AGE_HOURS', '24'))
 OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen2.5:7b')
 OLLAMA_TIMEOUT_SECONDS = int(os.environ.get('OLLAMA_TIMEOUT_SECONDS', '60'))
-
-
-# Use SQLite for local testing if no postgres
-if os.environ.get('USE_SQLITE'):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
