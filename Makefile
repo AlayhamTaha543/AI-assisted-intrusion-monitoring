@@ -1,5 +1,7 @@
 env:
-	test -f .env || cp .env.example .env
+	@test -f .env || (cp .env.example .env && \
+	  KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(48))") && \
+	  sed -i.bak "s|^DJANGO_SECRET_KEY=.*|DJANGO_SECRET_KEY=$$KEY|" .env && rm -f .env.bak)
 
 up: env
 	docker compose up --build
