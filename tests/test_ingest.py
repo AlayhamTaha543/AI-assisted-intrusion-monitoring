@@ -1,8 +1,7 @@
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.utils import timezone
-from rest_framework.authtoken.models import Token
 
 
 def test_normal_stores_no_incident(client, ingestor_token, db):

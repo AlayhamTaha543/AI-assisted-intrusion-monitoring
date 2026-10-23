@@ -8,3 +8,5 @@ venv/
 db.sqlite3
 PLAN.md
 *.log
+.pytest_cache/
+celerybeat-schedule*

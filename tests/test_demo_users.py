@@ -1,6 +1,5 @@
 from io import StringIO
 
-import pytest
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from rest_framework.authtoken.models import Token

@@ -2,9 +2,7 @@ import json
 from datetime import timedelta
 from urllib.parse import quote
 
-import pytest
 from django.utils import timezone
-from rest_framework.authtoken.models import Token
 
 from tests.conftest import make_alert
 

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
-from django.db import connections, connection
+from django.db import connection
 from django.conf import settings
 import redis
 

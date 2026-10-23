@@ -30,7 +30,6 @@ def test_agent_saves_valid_output(db):
 
 
 import json
-from datetime import timedelta
 
 from django.conf import settings
 

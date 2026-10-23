@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 
 import pytest
 from django.utils import timezone
-from rest_framework.authtoken.models import Token
 
 from tests.conftest import post_events
 

@@ -19,7 +19,7 @@ def _demo_login(client):
 
 
 def test_analyst_can_view_alerts_in_admin(client, db):
-    alert = make_alert(source_ip='10.7.0.1')
+    make_alert(source_ip='10.7.0.1')
     _demo_login(client)
     resp = client.get('/admin/alerts/alert/')
     assert resp.status_code == 200

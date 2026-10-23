@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import json
 import time
+from pathlib import Path
 
 import ollama
 
@@ -31,6 +32,9 @@ TOOL_DEFINITION = {
 }
 
 
+MODEL = 'qwen2.5:7b'
+
+
 def _client():
     host = 'http://localhost:11434'
     return ollama.Client(host=host, timeout=60)
@@ -47,7 +51,7 @@ def run():
         tool_called = False
         try:
             start = time.time()
-            resp1 = _client().chat(model='qwen2.5:7b', messages=messages, tools=[TOOL_DEFINITION], options={'temperature': 0})
+            resp1 = _client().chat(model=MODEL, messages=messages, tools=[TOOL_DEFINITION], options={'temperature': 0})
             msg = resp1.get('message', {}) if isinstance(resp1, dict) else getattr(resp1, 'message', {})
             tcs = getattr(msg, 'tool_calls', None) if not isinstance(msg, dict) else msg.get('tool_calls') or []
             if tcs and len(tcs) == 1:
@@ -56,7 +60,7 @@ def run():
                 ctx = get_related_context()
                 messages.append({'role': 'tool', 'tool_name': 'get_related_context', 'content': json.dumps(ctx)})
             resp2 = _client().chat(
-                model='qwen2.5:7b',
+                model=MODEL,
                 messages=messages + [{'role': 'user', 'content': 'Return JSON.'}],
                 format=Assessment.model_json_schema(),
                 options={'temperature': 0},
@@ -70,11 +74,23 @@ def run():
         except Exception as e:
             results.append((tool_called, False, 0))
             print(f'run{i+1}: fail {e}')
-    try:
-        with open('docs/DECISIONS.md', 'a') as f:
-            f.write(f'\nStep0: {results}\n')
-    except Exception:
-        pass
+    append_results(results)
+
+
+def append_results(results):
+    path = Path('docs/DECISIONS.md')
+    text = path.read_text() if path.exists() else '# Decisions\n'
+    text = text.replace('| _pending_ | | | | |\n', '')
+    if '## Step 0 results' not in text:
+        text += '\n## Step 0 results\n'
+    lines = [
+        '',
+        '| Run | Tool called | Valid JSON | Latency (ms) | Model |',
+        '| --- | --- | --- | --- | --- |',
+    ]
+    for index, (tool_called, valid, latency) in enumerate(results, 1):
+        lines.append(f'| {index} | {tool_called} | {valid} | {latency} | {MODEL} |')
+    path.write_text(text.rstrip() + '\n' + '\n'.join(lines) + '\n')
 
 
 if __name__ == '__main__':
