@@ -72,16 +72,10 @@ class EventIngestView(APIView):
                 ))
             if objs:
                 LogEvent.objects.bulk_create(objs, ignore_conflicts=True)
-            # fetch created events for detection
             created_events = list(LogEvent.objects.filter(event_id__in=[o.event_id for o in objs]))
-            if created_events:
-                process_events_for_detection(created_events)
-            else:
-                # still run detection on submitted events if any? but they may exist; run on all unique submitted for detection
-                # get by ids
-                submitted_ids = [s.validated_data['event_id'] for s in unique_list]
-                all_sub = list(LogEvent.objects.filter(event_id__in=submitted_ids))
-                if all_sub:
-                    process_events_for_detection(all_sub)
+            submitted_ids = [s.validated_data['event_id'] for s in unique_list]
+            all_submitted = list(LogEvent.objects.filter(event_id__in=submitted_ids))
+            if all_submitted:
+                process_events_for_detection(all_submitted)
 
         return Response({'received': len(data), 'inserted': len(created_events), 'duplicates': len(data) - len(created_events)}, status=status.HTTP_201_CREATED)
