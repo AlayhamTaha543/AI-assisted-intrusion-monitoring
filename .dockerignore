@@ -1,0 +1,10 @@
+.env
+.git/
+db.sqlite3
+venv/
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+celerybeat-schedule*

@@ -1,12 +1,13 @@
 services:
   db:
     image: postgres:16
+    env_file: [.env]
     environment:
-      POSTGRES_DB: ids
-      POSTGRES_USER: ids
-      POSTGRES_PASSWORD: ids
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ids"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,11 +27,11 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - .env.example
+      - .env
 
   api:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8000 --insecure
     volumes:
       - .:/app
     ports:
@@ -41,7 +42,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - .env.example
+      - .env
 
   worker:
     build: .
@@ -54,8 +55,4 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - .env.example
-    environment:
-      CELERY_TASK_SOFT_TIME_LIMIT: 270
-      CELERY_TASK_TIME_LIMIT: 300
-      CELERY_TASK_ACKS_LATE: 'False'
+      - .env
