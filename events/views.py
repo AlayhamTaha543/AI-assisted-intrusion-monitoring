@@ -1,5 +1,3 @@
-import uuid
-
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
@@ -27,45 +25,40 @@ class EventIngestView(APIView):
             return Response({'detail': 'Batch too large'}, status=status.HTTP_400_BAD_REQUEST)
 
         serializers_list = []
-        for item in data:
+        for idx, item in enumerate(data):
             s = LogEventSerializer(data=item)
             if not s.is_valid():
-                return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
-            serializers_list.append(s)
+                return Response({'errors': [{'index': idx, 'errors': s.errors}]}, status=status.HTTP_400_BAD_REQUEST)
+            serializers_list.append((idx, s))
 
-        # Check for duplicate event_ids within batch
         event_ids = []
-        for s in serializers_list:
-            eid = s.validated_data.get('event_id')
-            if eid is None:
-                eid = uuid.uuid4()
-                # attach back
-                s.validated_data['event_id'] = eid
-            event_ids.append(eid)
-        # deduplicate within batch by keeping first occurrence
+        for _, s in serializers_list:
+            event_ids.append(s.validated_data['event_id'])
+
+        # deduplicate within batch
         seen_batch = set()
-        unique_indices = []
-        for i, eid in enumerate(event_ids):
+        unique_list = []
+        for orig_idx, s in serializers_list:
+            eid = s.validated_data['event_id']
             if eid in seen_batch:
                 continue
             seen_batch.add(eid)
-            unique_indices.append(i)
+            unique_list.append(s)
 
-        # check existing
         existing = set(LogEvent.objects.filter(event_id__in=list(seen_batch)).values_list('event_id', flat=True))
         to_create_data = []
-        for idx in unique_indices:
-            s = serializers_list[idx]
-            vd = s.validated_data
+        for s in unique_list:
+            vd = dict(s.validated_data)
             eid = vd['event_id']
             if eid in existing:
                 continue
             to_create_data.append(vd)
 
-        created = []
+        created_events = []
         with transaction.atomic():
+            objs = []
             for vd in to_create_data:
-                event = LogEvent.objects.create(
+                objs.append(LogEvent(
                     event_id=vd['event_id'],
                     timestamp=vd['timestamp'],
                     source_ip=vd['source_ip'],
@@ -76,9 +69,19 @@ class EventIngestView(APIView):
                     username=vd.get('username'),
                     bytes_sent=vd.get('bytes_sent') or 0,
                     raw=vd.get('raw'),
-                )
-                created.append(event)
-            if created:
-                process_events_for_detection(created)
+                ))
+            if objs:
+                LogEvent.objects.bulk_create(objs, ignore_conflicts=True)
+            # fetch created events for detection
+            created_events = list(LogEvent.objects.filter(event_id__in=[o.event_id for o in objs]))
+            if created_events:
+                process_events_for_detection(created_events)
+            else:
+                # still run detection on submitted events if any? but they may exist; run on all unique submitted for detection
+                # get by ids
+                submitted_ids = [s.validated_data['event_id'] for s in unique_list]
+                all_sub = list(LogEvent.objects.filter(event_id__in=submitted_ids))
+                if all_sub:
+                    process_events_for_detection(all_sub)
 
-        return Response({'created': len(created)}, status=status.HTTP_201_CREATED)
+        return Response({'received': len(data), 'inserted': len(created_events), 'duplicates': len(data) - len(created_events)}, status=status.HTTP_201_CREATED)
