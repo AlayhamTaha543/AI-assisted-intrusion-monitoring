@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from simulator.generator import BRUTE_FORCE_IP, generate_scenario
+from alerts.models import Alert
+from simulator.generator import BRUTE_FORCE_IP, INJECTION_IP, PORT_SCAN_IP, generate_scenario
 from tests.conftest import post_events
 
 
@@ -96,3 +97,27 @@ def test_rerun_same_seed_is_idempotent(client, ingestor_token, db):
     assert LogEvent.objects.count() == rows_after_first
     assert Alert.objects.count() == alerts_after_first == 1
     assert Alert.objects.first().source_ip == BRUTE_FORCE_IP
+
+
+ALL_SCENARIOS = ['normal', 'brute_force', 'port_scan', 'benign_failures', 'injection', 'continue_attack']
+
+
+def test_ids_do_not_collide_across_scenarios():
+    seen = {}
+    for name in ALL_SCENARIOS:
+        for event in generate_scenario(name, seed=42, start=_start()):
+            assert event['event_id'] not in seen, f"{name} collides with {seen[event['event_id']]}"
+            seen[event['event_id']] = name
+
+
+@pytest.mark.django_db
+def test_demo_sequence_creates_all_expected_alerts(client, ingestor_token):
+    for name in ['normal', 'brute_force', 'port_scan', 'injection']:
+        resp = post_events(client, ingestor_token, generate_scenario(name, seed=42))
+        assert resp.status_code == 201
+        assert resp.json()['duplicates'] == 0, f'{name} lost events as duplicates'
+    assert set(Alert.objects.values_list('rule_name', 'source_ip')) == {
+        ('brute_force', BRUTE_FORCE_IP),
+        ('port_scan', PORT_SCAN_IP),
+        ('brute_force', INJECTION_IP),
+    }

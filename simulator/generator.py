@@ -161,7 +161,8 @@ def default_start(name, now=None):
 
 
 def generate_scenario(name, seed=42, start=None):
-    rng = random.Random(seed)
+    # Mix the scenario name into the seed so different scenarios never share event IDs.
+    rng = random.Random(f'{name}:{seed}')
     if start is None:
         start = default_start(name)
     events = SCENARIOS[name](rng, start)
