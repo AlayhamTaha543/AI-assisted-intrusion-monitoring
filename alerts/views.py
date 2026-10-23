@@ -1,4 +1,6 @@
+import ipaddress
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -41,10 +43,44 @@ class AlertListView(APIView):
 
         source_ip = request.query_params.get('source_ip')
         if source_ip:
-            queryset = queryset.filter(source_ip=source_ip)
+            try:
+                ipaddress.ip_address(source_ip)
+            except Exception:
+                return Response({'detail': 'Invalid filter'}, status=status.HTTP_400_BAD_REQUEST)
+            queryset = queryset.filter(source_ip=str(ipaddress.ip_address(source_ip)))
+
+        first_seen_after = request.query_params.get('first_seen_after')
+        if first_seen_after:
+            dt = parse_datetime(first_seen_after)
+            if dt is None:
+                return Response({'detail': 'Invalid filter'}, status=status.HTTP_400_BAD_REQUEST)
+            if dt.tzinfo is None:
+                from django.utils.timezone import make_aware
+                dt = make_aware(dt)
+            queryset = queryset.filter(first_seen_at__gte=dt)
+
+        first_seen_before = request.query_params.get('first_seen_before')
+        if first_seen_before:
+            dt = parse_datetime(first_seen_before)
+            if dt is None:
+                return Response({'detail': 'Invalid filter'}, status=status.HTTP_400_BAD_REQUEST)
+            if dt.tzinfo is None:
+                from django.utils.timezone import make_aware
+                dt = make_aware(dt)
+            queryset = queryset.filter(first_seen_at__lte=dt)
+
+        page_size = request.query_params.get('page_size', 25)
+        try:
+            ps = int(page_size)
+        except Exception:
+            return Response({'detail': 'Invalid page_size'}, status=status.HTTP_400_BAD_REQUEST)
+        if ps < 1:
+            return Response({'detail': 'Invalid page_size'}, status=status.HTTP_400_BAD_REQUEST)
+        if ps > 100:
+            ps = 100
 
         paginator = PageNumberPagination()
-        paginator.page_size = min(int(request.query_params.get('page_size', 25)), 100)
+        paginator.page_size = ps
         page = paginator.paginate_queryset(queryset, request)
         serializer = AlertListSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
@@ -67,10 +103,12 @@ class AlertDetailView(APIView):
         except Alert.DoesNotExist:
             return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        if set(request.data.keys()) != {'incident_status'}:
+        if not isinstance(request.data, dict) or set(request.data.keys()) != {'incident_status'}:
             return Response({'detail': 'Only incident_status allowed'}, status=status.HTTP_400_BAD_REQUEST)
 
         new_status = request.data.get('incident_status')
+        if not isinstance(new_status, str):
+            return Response({'detail': 'Invalid transition'}, status=status.HTTP_400_BAD_REQUEST)
         allowed_transitions = {
             'open': ['acknowledged', 'resolved'],
             'acknowledged': ['resolved'],
