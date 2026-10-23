@@ -59,6 +59,6 @@ class LogEventSerializer(serializers.Serializer):
             raise serializers.ValidationError('Invalid raw')
         if len(s.encode('utf-8')) > settings.MAX_RAW_BYTES:
             raise serializers.ValidationError('raw too large')
-        if '\u0000' in s or '\x00' in s:
+        if '\\u0000' in s:
             raise serializers.ValidationError('raw contains null')
         return value
